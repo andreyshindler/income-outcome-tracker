@@ -1,0 +1,12 @@
+.git
+.gitignore
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+.env.*
+credentials/
+data/
+requirements-dev.txt
+README.md

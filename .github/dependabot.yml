@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Python deps for the receipt-tracker app
+  - package-ecosystem: pip
+    directory: /receipt-tracker
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions used by the CI/CD workflow
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
