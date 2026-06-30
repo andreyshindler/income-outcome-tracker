@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 
 # Hebrew + English keywords that usually mark the line with the actual total
 TOTAL_KEYWORDS = [
-    'סה"כ', "סהכ", "סך הכל", "לתשלום", "total", "amount due", "total due", "grand total"
+    'סה"כ', "סהכ", "סך הכל", "לתשלום", "סכום", "סכ", "total", "amount due", "total due", "grand total"
 ]
 
 # A run of digits that may be grouped with '.', ',', spaces or non-breaking spaces.
@@ -97,12 +97,22 @@ def extract_amount(text: str) -> Optional[float]:
         if any(kw.lower() in lowered for kw in TOTAL_KEYWORDS):
             total_line_nums.extend(line_nums)
 
+    # Clamp to a realistic receipt range to avoid latching onto barcodes / IDs.
+    def _plausible(v: float) -> bool:
+        return 0 < v < 100_000
+
     if total_line_nums:
-        return round(max(total_line_nums), 2)
+        candidates = [v for v in total_line_nums if _plausible(v)]
+        if candidates:
+            return round(max(candidates), 2)
     if decimal_nums:
-        return round(max(decimal_nums), 2)
+        candidates = [v for v in decimal_nums if _plausible(v)]
+        if candidates:
+            return round(max(candidates), 2)
     if all_nums:
-        return round(max(all_nums), 2)
+        candidates = [v for v in all_nums if _plausible(v)]
+        if candidates:
+            return round(max(candidates), 2)
     return None
 
 

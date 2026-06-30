@@ -26,6 +26,18 @@ def test_amount_prefers_total_line_with_thousands_separator():
     assert extract_amount(text) == 1234.56
 
 
+def test_amount_prefers_sikkum_keyword():
+    # "סכום" (sum) appears on Israeli supermarket receipts
+    text = "Item 1.90\nItem 34.90\nסכום 474.89"
+    assert extract_amount(text) == 474.89
+
+
+def test_amount_clamps_barcode_sized_numbers():
+    # A number over 100,000 (e.g. a barcode) should be ignored
+    text = "Total 25062600009065526\nסכום 474.89"
+    assert extract_amount(text) == 474.89
+
+
 def test_amount_detects_whole_number_total():
     assert extract_amount("Total 50") == 50.0
 
