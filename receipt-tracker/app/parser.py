@@ -66,53 +66,61 @@ def _parse_number(token: str) -> Optional[Tuple[float, bool]]:
         return None
 
 
+def _plausible(v: float) -> bool:
+    """Reject barcodes, IDs, and years masquerading as amounts."""
+    return 0 < v < 100_000
+
+
 def extract_amount(text: str) -> Optional[float]:
     """
     Receipts usually contain several numbers (line items, VAT, total).
-    Strategy: prefer the largest number on a line containing a "total" keyword;
-    otherwise fall back to the largest money-looking number (one with a decimal
-    part), and only then to the largest bare integer. Preferring decimals first
-    avoids latching onto phone numbers / IDs that have no agorot.
+    Strategy (in priority order):
+      1. Largest *decimal* number on a total-keyword line (e.g. "סכום 1536.70").
+      2. Largest *integer* on a total-keyword line (rare, but possible).
+      3. Largest decimal number anywhere on the document.
+      4. Largest integer anywhere.
+    Preferring decimals on total lines avoids picking up years (e.g. "2024")
+    that appear in document titles containing keywords like "לתשלום".
+    All candidates are clamped to < 100,000 to exclude barcodes / check numbers.
     """
     all_nums = []
     decimal_nums = []
-    total_line_nums = []
+    total_decimal_nums = []
+    total_int_nums = []
 
     for line in text.splitlines():
-        line_nums = []
+        line_decimal = []
+        line_int = []
         for match in NUMBER_PATTERN.finditer(line):
             parsed = _parse_number(match.group(0))
             if parsed is None:
                 continue
             value, had_decimal = parsed
-            line_nums.append(value)
+            if not _plausible(value):
+                continue
             all_nums.append(value)
             if had_decimal:
                 decimal_nums.append(value)
+                line_decimal.append(value)
+            else:
+                line_int.append(value)
 
-        if not line_nums:
+        if not (line_decimal or line_int):
             continue
 
         lowered = line.lower()
         if any(kw.lower() in lowered for kw in TOTAL_KEYWORDS):
-            total_line_nums.extend(line_nums)
+            total_decimal_nums.extend(line_decimal)
+            total_int_nums.extend(line_int)
 
-    # Clamp to a realistic receipt range to avoid latching onto barcodes / IDs.
-    def _plausible(v: float) -> bool:
-        return 0 < v < 100_000
-
-    if total_line_nums:
-        candidates = [v for v in total_line_nums if _plausible(v)]
-        if candidates:
-            return round(max(candidates), 2)
+    if total_decimal_nums:
+        return round(max(total_decimal_nums), 2)
+    if total_int_nums:
+        return round(max(total_int_nums), 2)
     if decimal_nums:
-        candidates = [v for v in decimal_nums if _plausible(v)]
-        if candidates:
-            return round(max(candidates), 2)
+        return round(max(decimal_nums), 2)
     if all_nums:
-        candidates = [v for v in all_nums if _plausible(v)]
-        if candidates:
-            return round(max(candidates), 2)
+        return round(max(all_nums), 2)
     return None
 
 
