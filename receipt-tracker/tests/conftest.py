@@ -1,20 +1,7 @@
-"""Shared test setup: stub the Google Vision SDK, point the app at an in-memory
-SQLite DB, and expose a FastAPI TestClient."""
+"""Shared test setup: point the app at an in-memory SQLite DB and expose a FastAPI TestClient."""
 import os
-import sys
-import types
 
 import pytest
-
-# Stub google.cloud.vision so app.ocr imports without the real SDK installed.
-_google = types.ModuleType("google")
-_cloud = types.ModuleType("google.cloud")
-_vision = types.ModuleType("google.cloud.vision")
-_vision.ImageAnnotatorClient = object
-_vision.Image = object
-sys.modules.setdefault("google", _google)
-sys.modules.setdefault("google.cloud", _cloud)
-sys.modules.setdefault("google.cloud.vision", _vision)
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123:test")
 os.environ.setdefault("DATABASE_URL", "sqlite://")

@@ -20,9 +20,7 @@ services:
       TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
       RECEIPTS_API_TOKEN: ${RECEIPTS_API_TOKEN}
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/google-vision.json
     volumes:
-      - ./credentials/google-vision.json:/app/credentials/google-vision.json:ro
       - receipts_images:/app/data/images
     ports:
       # bind to localhost only - nginx proxies the public path
