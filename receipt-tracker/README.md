@@ -12,11 +12,16 @@ extracted automatically → you tap a category button → it's saved to Postgres
 4. The bot replies with what it found plus category buttons (Race Timing, 3D Printing,
    MTB Coaching, Vehicle, VPS/Software, Equipment, General/Office, Personal, Other - edit
    the list in `app/categories.py` if you want different ones).
-5. Tapping a category confirms the receipt and marks it `confirmed` in the DB.
+5. Tapping a category confirms the receipt (marks it `confirmed`), then the bot asks for a
+   **business-use %** (100/75/50/25/0) - the tax-deductible portion - and saves your choice.
 6. `GET /receipts-api/receipts` returns everything as JSON (filterable by `?category=` and
    `?status=`) - handy for pulling into your existing openpyxl tax tracker.
 7. `PATCH /receipts-api/receipts/{id}` lets you correct a stored receipt (amount, vendor,
    date, category, status, or `business_use_percent` for partial-business expenses).
+
+Bot commands (send as a normal message): `/recent [N]` lists the last N receipts (default 10),
+`/total` shows per-category totals for confirmed receipts (gross and business-use-weighted),
+and `/help` lists everything.
 
 OCR accuracy on real-world Hebrew receipts is decent but not perfect, especially for faded
 thermal paper. The amount-extraction logic prefers the line containing a "total"/"סה"כ"

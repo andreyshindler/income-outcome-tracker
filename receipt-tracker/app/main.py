@@ -9,7 +9,13 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Re
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-from app.categories import CATEGORY_CODES, CATEGORY_LABELS, category_keyboard
+from app.categories import (
+    BUSINESS_USE_OPTIONS,
+    CATEGORY_CODES,
+    CATEGORY_LABELS,
+    business_use_keyboard,
+    category_keyboard,
+)
 from app.config import (
     RECEIPTS_API_TOKEN,
     RECEIPTS_IMAGE_DIR,
@@ -125,8 +131,17 @@ def store_receipt(user_id: int, chat_id: int, message_id: int, image_bytes: byte
         db.close()
 
 
-def confirm_receipt(receipt_id: int, category_code: str):
-    """Mark a receipt confirmed under the given category. Returns (label, text)
+def _detail_lines(receipt: Receipt) -> str:
+    amount = receipt.amount if receipt.amount is not None else "n/a"
+    return (
+        f"Amount: {amount} {receipt.currency}\n"
+        f"Vendor: {receipt.vendor or 'n/a'}\n"
+        f"Date: {receipt.receipt_date.isoformat() if receipt.receipt_date else 'n/a'}"
+    )
+
+
+def set_category(receipt_id: int, category_code: str):
+    """Mark a receipt confirmed under the given category. Returns (label, details)
     or None if the receipt doesn't exist. Runs in a worker thread."""
     db = SessionLocal()
     try:
@@ -137,20 +152,110 @@ def confirm_receipt(receipt_id: int, category_code: str):
         receipt.status = "confirmed"
         db.commit()
         db.refresh(receipt)
-
-        label = CATEGORY_LABELS.get(category_code, category_code)
-        text = (
-            f"✅ Receipt #{receipt.id} saved as {label}\n"
-            f"Amount: {receipt.amount if receipt.amount is not None else 'n/a'} {receipt.currency}\n"
-            f"Vendor: {receipt.vendor or 'n/a'}\n"
-            f"Date: {receipt.receipt_date.isoformat() if receipt.receipt_date else 'n/a'}"
-        )
-        return label, text
+        return CATEGORY_LABELS.get(category_code, category_code), _detail_lines(receipt)
     finally:
         db.close()
 
 
+def set_business_use(receipt_id: int, percent: int):
+    """Set a receipt's business-use %. Returns (label, details) or None. Threaded."""
+    db = SessionLocal()
+    try:
+        receipt = db.get(Receipt, receipt_id)
+        if not receipt:
+            return None
+        receipt.business_use_percent = percent
+        db.commit()
+        db.refresh(receipt)
+        label = CATEGORY_LABELS.get(receipt.category, receipt.category or "n/a")
+        return label, _detail_lines(receipt)
+    finally:
+        db.close()
+
+
+def recent_receipts_text(limit: int = 10) -> str:
+    """A compact list of the most recent receipts. Runs in a worker thread."""
+    db = SessionLocal()
+    try:
+        rows = db.query(Receipt).order_by(Receipt.created_at.desc()).limit(limit).all()
+        if not rows:
+            return "No receipts yet."
+        lines = [f"🧾 Last {len(rows)} receipts:"]
+        for r in rows:
+            rdate = r.receipt_date.isoformat() if r.receipt_date else "—"
+            amount = r.amount if r.amount is not None else "?"
+            label = CATEGORY_LABELS.get(r.category, r.category or "uncategorised")
+            lines.append(f"#{r.id}  {rdate}  {amount} {r.currency}  {label}  [{r.status}]")
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def totals_text() -> str:
+    """Per-category totals for confirmed receipts, with a business-use-weighted
+    column (the tax-deductible portion). Runs in a worker thread."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Receipt)
+            .filter(Receipt.status == "confirmed", Receipt.amount.isnot(None))
+            .all()
+        )
+        if not rows:
+            return "No confirmed receipts yet."
+
+        per_cat = {}  # code -> [gross, business]
+        for r in rows:
+            gross = float(r.amount)
+            business = gross * (r.business_use_percent or 0) / 100
+            agg = per_cat.setdefault(r.category, [0.0, 0.0])
+            agg[0] += gross
+            agg[1] += business
+
+        lines = ["📊 Totals (confirmed) — gross / business:"]
+        grand_gross = grand_business = 0.0
+        for code, (gross, business) in sorted(per_cat.items(), key=lambda kv: -kv[1][0]):
+            label = CATEGORY_LABELS.get(code, code or "uncategorised")
+            lines.append(f"{label}: {gross:.2f} / {business:.2f}")
+            grand_gross += gross
+            grand_business += business
+        lines.append(f"——\nTotal: {grand_gross:.2f} / {grand_business:.2f}")
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+HELP_TEXT = (
+    "📷 Send a photo of a receipt and I'll OCR it, then you tap a category and a "
+    "business-use %.\n\n"
+    "Commands:\n"
+    "/recent [N] — list the last N receipts (default 10)\n"
+    "/total — per-category totals for confirmed receipts\n"
+    "/help — this message"
+)
+
+
 # --- Telegram update handlers (run as background tasks) ---
+
+async def handle_text_command(chat_id: int, text: str):
+    """Handle a non-photo message: /recent, /total, /help, /start, or a nudge."""
+    text = (text or "").strip()
+    parts = text.split()
+    command = parts[0].lower().split("@")[0] if parts else ""
+
+    if command == "/recent":
+        limit = 10
+        if len(parts) > 1 and parts[1].isdigit():
+            limit = max(1, min(50, int(parts[1])))
+        body = await asyncio.to_thread(recent_receipts_text, limit)
+        await tg_call("sendMessage", {"chat_id": chat_id, "text": body})
+    elif command == "/total":
+        body = await asyncio.to_thread(totals_text)
+        await tg_call("sendMessage", {"chat_id": chat_id, "text": body})
+    else:
+        # /help, /start, or anything else -> show help.
+        await tg_call("sendMessage", {"chat_id": chat_id, "text": HELP_TEXT})
+
 
 async def handle_message(message: dict):
     user_id = message["from"]["id"]
@@ -162,10 +267,7 @@ async def handle_message(message: dict):
 
     photos = message.get("photo")
     if not photos:
-        await tg_call(
-            "sendMessage",
-            {"chat_id": chat_id, "text": "Send a photo of a receipt and I'll read it."},
-        )
+        await handle_text_command(chat_id, message.get("text", ""))
         return
 
     message_id = message["message_id"]
@@ -219,32 +321,61 @@ async def handle_callback(callback: dict):
         )
         return
 
-    parts = data.split(":", 2)
-    if len(parts) != 3 or parts[0] != "cat" or parts[2] not in CATEGORY_CODES:
+    async def answer():
+        # Always answer so the client stops showing a spinner on the button.
         await tg_call("answerCallbackQuery", {"callback_query_id": callback_id})
+
+    parts = data.split(":", 2)
+    if len(parts) != 3 or parts[0] not in ("cat", "pct"):
+        await answer()
         return
 
-    _, receipt_id_str, category_code = parts
+    prefix, receipt_id_str, value = parts
     try:
         receipt_id = int(receipt_id_str)
     except ValueError:
-        await tg_call("answerCallbackQuery", {"callback_query_id": callback_id})
+        await answer()
         return
 
-    result = await asyncio.to_thread(confirm_receipt, receipt_id, category_code)
-    if result:
-        _, text = result
-        await tg_call(
-            "editMessageText",
-            {
-                "chat_id": callback["message"]["chat"]["id"],
-                "message_id": callback["message"]["message_id"],
-                "text": text,
-            },
-        )
+    chat_id = callback["message"]["chat"]["id"]
+    message_id = callback["message"]["message_id"]
 
-    # Always answer so the client stops showing a spinner on the button.
-    await tg_call("answerCallbackQuery", {"callback_query_id": callback_id})
+    if prefix == "cat":
+        if value not in CATEGORY_CODES:
+            await answer()
+            return
+        result = await asyncio.to_thread(set_category, receipt_id, value)
+        if result:
+            label, details = result
+            # Step 2: ask for the business-use split.
+            await tg_call(
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": f"📂 Receipt #{receipt_id} → {label}\n{details}\n\nBusiness use %?",
+                    "reply_markup": business_use_keyboard(receipt_id),
+                },
+            )
+    else:  # prefix == "pct"
+        if not value.isdigit() or int(value) not in BUSINESS_USE_OPTIONS:
+            await answer()
+            return
+        result = await asyncio.to_thread(set_business_use, receipt_id, int(value))
+        if result:
+            label, details = result
+            await tg_call(
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": (
+                        f"✅ Receipt #{receipt_id} saved as {label} ({value}% business)\n{details}"
+                    ),
+                },
+            )
+
+    await answer()
 
 
 @app.post(WEBHOOK_PATH)

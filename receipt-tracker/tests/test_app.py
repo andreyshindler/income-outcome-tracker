@@ -41,12 +41,42 @@ def test_store_receipt_parses_and_dedupes(app_module):
         pass
 
 
-def test_confirm_receipt(app_module):
+def test_set_category_then_business_use(app_module):
     app_module.ocr_image = lambda b: "Shop\n50.00"
     rid, _ = app_module.store_receipt(42, 200, 8, b"img")
-    label, text = app_module.confirm_receipt(rid, "vehicle")
+
+    label, details = app_module.set_category(rid, "vehicle")
     assert "Vehicle" in label
-    assert app_module.confirm_receipt(999999, "vehicle") is None
+    assert "50" in details
+    assert app_module.set_category(999999, "vehicle") is None
+
+    # Second step: business-use split.
+    label2, _ = app_module.set_business_use(rid, 50)
+    assert "Vehicle" in label2
+    assert app_module.set_business_use(999999, 50) is None
+
+    rows = app_module.SessionLocal().query(app_module.Receipt).all()
+    saved = [r for r in rows if r.id == rid][0]
+    assert saved.status == "confirmed"
+    assert saved.category == "vehicle"
+    assert saved.business_use_percent == 50
+
+
+def test_recent_and_totals_text(app_module):
+    app_module.ocr_image = lambda b: "Shop\n50.00"
+    assert app_module.recent_receipts_text() == "No receipts yet."
+    assert app_module.totals_text() == "No confirmed receipts yet."
+
+    rid, _ = app_module.store_receipt(42, 210, 11, b"img")
+    app_module.set_category(rid, "vehicle")
+    app_module.set_business_use(rid, 50)
+
+    recent = app_module.recent_receipts_text()
+    assert f"#{rid}" in recent and "Vehicle" in recent
+
+    totals = app_module.totals_text()
+    # gross 50.00 / business 25.00 for the single confirmed vehicle receipt
+    assert "50.00" in totals and "25.00" in totals
 
 
 def test_patch_business_use_percent_and_validation(app_module, client):

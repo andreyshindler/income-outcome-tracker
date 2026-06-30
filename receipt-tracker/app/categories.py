@@ -16,6 +16,10 @@ CATEGORY_CODES = {code for code, _ in CATEGORIES}
 CATEGORY_LABELS = dict(CATEGORIES)
 
 
+# Business-use percentages offered after a category is picked (tax split).
+BUSINESS_USE_OPTIONS = [100, 75, 50, 25, 0]
+
+
 def category_keyboard(receipt_id: int) -> dict:
     """Telegram inline_keyboard markup, 2 buttons per row."""
     rows = []
@@ -28,3 +32,12 @@ def category_keyboard(receipt_id: int) -> dict:
     if row:
         rows.append(row)
     return {"inline_keyboard": rows}
+
+
+def business_use_keyboard(receipt_id: int) -> dict:
+    """One row of business-use-% buttons shown after category selection."""
+    row = [
+        {"text": f"{pct}%", "callback_data": f"pct:{receipt_id}:{pct}"}
+        for pct in BUSINESS_USE_OPTIONS
+    ]
+    return {"inline_keyboard": [row]}
