@@ -9,20 +9,20 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Re
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
+from app.categories import CATEGORY_CODES, CATEGORY_LABELS, category_keyboard
 from app.config import (
-    TELEGRAM_API_BASE,
-    TELEGRAM_FILE_BASE,
-    TELEGRAM_ALLOWED_USER_IDS,
-    TELEGRAM_WEBHOOK_SECRET,
     RECEIPTS_API_TOKEN,
     RECEIPTS_IMAGE_DIR,
+    TELEGRAM_ALLOWED_USER_IDS,
+    TELEGRAM_API_BASE,
+    TELEGRAM_FILE_BASE,
+    TELEGRAM_WEBHOOK_SECRET,
     WEBHOOK_PATH,
 )
-from app.database import Base, engine, SessionLocal
+from app.database import Base, SessionLocal, engine
 from app.models import Receipt
 from app.ocr import ocr_image
 from app.parser import extract_amount, extract_date, extract_vendor
-from app.categories import category_keyboard, CATEGORY_CODES, CATEGORY_LABELS
 
 logger = logging.getLogger("receipts")
 

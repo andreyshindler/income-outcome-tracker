@@ -95,10 +95,10 @@ curl -H "X-API-Token: <RECEIPTS_API_TOKEN>" \
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
-1. **Lint & test** - installs the lightweight `requirements-dev.txt`, byte-compiles
-   `app/`, and runs the `pytest` suite under `tests/` (parser correctness, webhook
-   secret/API-token auth, OCR-store dedup, the PATCH endpoint). Tests stub the Vision
-   SDK and use in-memory SQLite, so they need no secrets or external services.
+1. **Lint & test** - installs the lightweight `requirements-dev.txt`, runs `ruff`,
+   byte-compiles `app/`, and runs the `pytest` suite under `tests/` (parser correctness,
+   webhook secret/API-token auth, OCR-store dedup, the PATCH endpoint). Tests stub the
+   Vision SDK and use in-memory SQLite, so they need no secrets or external services.
 2. **Build image** - builds the Docker image on every run to catch Dockerfile breakage,
    and **publishes** it to `ghcr.io/<owner>/income-outcome-tracker/receipt-tracker` on
    pushes to `main` and `v*` tags (uses the built-in `GITHUB_TOKEN`).
@@ -124,3 +124,11 @@ pytest -q
   useful as a backup/audit trail for tax purposes.
 - Webhook re-deliveries are idempotent: a unique `(chat_id, message_id)` constraint plus an
   in-handler check means a retried photo won't create a duplicate receipt.
+- **Upgrading an existing DB:** the app creates tables with `create_all`, which never ALTERs
+  an existing schema. If you already have a `receipts` table from before the dedup constraint
+  was added, apply it once by hand:
+  ```sql
+  ALTER TABLE receipts
+    ADD CONSTRAINT uq_receipt_chat_message UNIQUE (telegram_chat_id, telegram_message_id);
+  ```
+  (Fresh deployments get it automatically.)

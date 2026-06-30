@@ -30,12 +30,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Lint (ruff)
+        run: ruff check app tests
+
       - name: Byte-compile sources
         run: python -m compileall app
 
       - name: Run tests
         run: pytest -q
 
+  # Builds on every run to catch Dockerfile breakage, and publishes to GHCR on
+  # main/tags as a versioned artifact + history. NOTE: the `deploy` job below
+  # rebuilds on the server (`up -d --build`, matching the README's flow), so it
+  # does not pull this image. The GHCR image is for record/rollback and anyone
+  # who'd rather `docker pull` than build; switch deploy to pull-based only if
+  # you also give the server GHCR credentials.
   image:
     name: Build image (publish on main/tags)
     needs: test

@@ -1,7 +1,7 @@
 """Unit tests for the OCR-text parsing helpers (no external deps)."""
 import pytest
 
-from app.parser import extract_amount, extract_date, extract_vendor, _parse_number
+from app.parser import _parse_number, extract_amount, extract_date, extract_vendor
 
 
 @pytest.mark.parametrize(
