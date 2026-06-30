@@ -91,6 +91,31 @@ curl -H "X-API-Token: <RECEIPTS_API_TOKEN>" \
   "https://yourdomain.com/receipts-api/receipts?status=confirmed"
 ```
 
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
+
+1. **Lint & test** - installs the lightweight `requirements-dev.txt`, byte-compiles
+   `app/`, and runs the `pytest` suite under `tests/` (parser correctness, webhook
+   secret/API-token auth, OCR-store dedup, the PATCH endpoint). Tests stub the Vision
+   SDK and use in-memory SQLite, so they need no secrets or external services.
+2. **Build image** - builds the Docker image on every run to catch Dockerfile breakage,
+   and **publishes** it to `ghcr.io/<owner>/income-outcome-tracker/receipt-tracker` on
+   pushes to `main` and `v*` tags (uses the built-in `GITHUB_TOKEN`).
+3. **Deploy** - dormant by default. To enable continuous deploy to srv1515969, set the
+   repo **variable** `DEPLOY_ENABLED=true` and add secrets `DEPLOY_HOST`, `DEPLOY_USER`,
+   and `DEPLOY_SSH_KEY`. It then SSHes in on every `main` push and runs
+   `git pull --ff-only && docker compose up -d --build`. (Assumes the repo is cloned at
+   `~/receipt-tracker` on the server.) Until you opt in, this job is skipped and CI stays
+   green.
+
+Run the tests locally:
+```bash
+cd receipt-tracker
+pip install -r requirements-dev.txt
+pytest -q
+```
+
 ## Notes
 
 - Port `8431` is used for the app container - change it in `docker-compose.yml` and
