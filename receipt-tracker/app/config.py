@@ -17,10 +17,6 @@ TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 # The API fails closed: if this is unset, the API returns 503.
 RECEIPTS_API_TOKEN = os.environ.get("RECEIPTS_API_TOKEN", "")
 
-GOOGLE_APPLICATION_CREDENTIALS = os.environ.get(
-    "GOOGLE_APPLICATION_CREDENTIALS", "/app/credentials/google-vision.json"
-)
-
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 RECEIPTS_IMAGE_DIR = os.environ.get("RECEIPTS_IMAGE_DIR", "/app/data/images")

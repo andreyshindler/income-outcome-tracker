@@ -1,32 +1,22 @@
-import os
+import io
 
-from google.cloud import vision
+import numpy as np
+from PIL import Image
 
-from app.config import GOOGLE_APPLICATION_CREDENTIALS
-
-os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", GOOGLE_APPLICATION_CREDENTIALS)
-
-_client = None
+_reader = None
 
 
-def get_client() -> vision.ImageAnnotatorClient:
-    global _client
-    if _client is None:
-        _client = vision.ImageAnnotatorClient()
-    return _client
+def get_reader():
+    global _reader
+    if _reader is None:
+        import easyocr  # lazy: avoids loading torch at import time and during tests
+        _reader = easyocr.Reader(['en', 'he'], gpu=False)
+    return _reader
 
 
 def ocr_image(image_bytes: bytes) -> str:
-    """Run Google Vision text detection and return the full extracted text block."""
-    client = get_client()
-    image = vision.Image(content=image_bytes)
-    response = client.text_detection(image=image)
-
-    if response.error.message:
-        raise RuntimeError(f"Vision API error: {response.error.message}")
-
-    if not response.text_annotations:
-        return ""
-
-    # First annotation is the full block of detected text.
-    return response.text_annotations[0].description
+    """Run EasyOCR text detection and return the full extracted text block."""
+    reader = get_reader()
+    image = np.array(Image.open(io.BytesIO(image_bytes)).convert("RGB"))
+    results = reader.readtext(image)
+    return "\n".join(text for _, text, _ in results)

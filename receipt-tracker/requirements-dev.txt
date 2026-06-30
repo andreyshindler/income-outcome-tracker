@@ -1,5 +1,5 @@
-# Test-only deps. The Google Vision SDK and psycopg2 are NOT needed: tests stub
-# google.cloud.vision and run against in-memory SQLite (see tests/conftest.py).
+# Test-only deps. easyocr/torch and psycopg2 are NOT needed: tests stub
+# ocr_image directly and run against in-memory SQLite (see tests/conftest.py).
 fastapi>=0.115,<0.116
 httpx>=0.27,<0.29
 sqlalchemy>=2.0,<2.1

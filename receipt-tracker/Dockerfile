@@ -2,8 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-download EasyOCR models so first container start doesn't fetch them at runtime
+RUN python -c "import easyocr; easyocr.Reader(['en', 'he'], gpu=False)"
 
 COPY app ./app
 

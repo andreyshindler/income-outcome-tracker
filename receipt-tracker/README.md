@@ -1,13 +1,13 @@
 # VeloGrip Receipt Tracker
 
-Send a photo of a receipt to a Telegram bot → Google Vision OCRs it → amount/date/vendor are
+Send a photo of a receipt to a Telegram bot → EasyOCR reads it locally → amount/date/vendor are
 extracted automatically → you tap a category button → it's saved to Postgres.
 
 ## How it works
 
 1. You photograph a receipt and send it to the bot.
-2. The bot acknowledges immediately, then in the background saves the image to disk and sends
-   it to Google Cloud Vision for text detection.
+2. The bot acknowledges immediately, then in the background saves the image to disk and runs
+   EasyOCR locally to extract text (no external API needed).
 3. Simple parsing pulls out the total amount, date, and vendor name from the OCR text.
 4. The bot replies with what it found plus category buttons (Race Timing, 3D Printing,
    MTB Coaching, Vehicle, VPS/Software, Equipment, General/Office, Personal, Other - edit
@@ -46,22 +46,16 @@ This app is reachable from the public internet via nginx, so access is gated in 
 **1. Create the Telegram bot**
 Message @BotFather → `/newbot` → copy the token into `.env`.
 
-**2. Get a Google Cloud Vision API key**
-- Create/use a GCP project, enable the "Cloud Vision API".
-- Create a service account, generate a JSON key.
-- Save it as `credentials/google-vision.json` in this project (already gitignored).
-- Vision API pricing: first 1,000 units/month free, then ~$1.50 per 1,000 - plenty for
-  personal receipt volume.
-
-**3. Configure**
+**2. Configure**
 ```bash
 cp .env.example .env
 # edit .env: POSTGRES_PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_IDS,
 #            TELEGRAM_WEBHOOK_SECRET, RECEIPTS_API_TOKEN
 # generate the two secrets with e.g. `openssl rand -hex 32`
-mkdir -p credentials
-# place google-vision.json in credentials/
 ```
+
+OCR runs locally via EasyOCR — no API key or cloud account needed. Models (~200 MB) are
+downloaded once at Docker image build time and baked in.
 
 ## Deploy to srv1515969
 
