@@ -38,6 +38,13 @@ def test_amount_clamps_barcode_sized_numbers():
     assert extract_amount(text) == 474.89
 
 
+def test_amount_prefers_decimal_over_year_on_total_line():
+    # "לתשלום" appears in both the title (with year 2024) and the amount line;
+    # the decimal 1536.70 must win over the bare integer 2024.
+    text = "חשבון לתשלום תקופתי ארנונה 1-2/2024\nהסכום לתשלום 1536.70"
+    assert extract_amount(text) == 1536.70
+
+
 def test_amount_detects_whole_number_total():
     assert extract_amount("Total 50") == 50.0
 
