@@ -2,6 +2,6 @@ fastapi>=0.115,<0.116
 uvicorn[standard]>=0.30,<0.35
 httpx>=0.27,<0.29
 sqlalchemy>=2.0,<2.1
-psycopg2-binary>=2.9,<3.0
+psycopg2-binary>=2.9.12,<3.0
 pytesseract>=0.3,<0.4
 Pillow>=10,<12
