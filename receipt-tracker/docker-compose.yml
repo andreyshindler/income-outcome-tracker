@@ -1,0 +1,40 @@
+services:
+  receipts-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: receipts
+      POSTGRES_USER: receipts
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - receipts_db_data:/var/lib/postgresql/data
+    networks:
+      - receipts_net
+
+  receipts-app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://receipts:${POSTGRES_PASSWORD}@receipts-db:5432/receipts
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      RECEIPTS_API_TOKEN: ${RECEIPTS_API_TOKEN}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/google-vision.json
+    volumes:
+      - ./credentials/google-vision.json:/app/credentials/google-vision.json:ro
+      - receipts_images:/app/data/images
+    ports:
+      # bind to localhost only - nginx proxies the public path
+      - "127.0.0.1:8431:8000"
+    depends_on:
+      - receipts-db
+    networks:
+      - receipts_net
+
+volumes:
+  receipts_db_data:
+  receipts_images:
+
+networks:
+  receipts_net:
