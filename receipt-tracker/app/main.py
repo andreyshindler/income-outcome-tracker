@@ -417,6 +417,7 @@ def serialize(r: Receipt) -> dict:
         "business_use_percent": r.business_use_percent,
         "status": r.status,
         "created_at": r.created_at.isoformat() if r.created_at else None,
+        "raw_ocr_text": r.raw_ocr_text,
     }
 
 
