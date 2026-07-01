@@ -89,6 +89,9 @@ def extract_amount(text: str) -> Optional[float]:
     total_int_nums = []
 
     for line in text.splitlines():
+        lowered = line.lower()
+        is_total_line = any(kw.lower() in lowered for kw in TOTAL_KEYWORDS)
+
         line_decimal = []
         line_int = []
         for match in NUMBER_PATTERN.finditer(line):
@@ -96,27 +99,30 @@ def extract_amount(text: str) -> Optional[float]:
             if parsed is None:
                 continue
             value, had_decimal = parsed
-            if not _plausible(value):
+            # Always keep numbers on total-keyword lines (OCR may merge
+            # "1536.70" → "153670", which would otherwise be filtered).
+            # Apply the plausibility clamp only for non-total lines.
+            if not is_total_line and not _plausible(value):
                 continue
-            all_nums.append(value)
             if had_decimal:
                 decimal_nums.append(value)
                 line_decimal.append(value)
             else:
+                all_nums.append(value)
                 line_int.append(value)
 
-        if not (line_decimal or line_int):
-            continue
-
-        lowered = line.lower()
-        if any(kw.lower() in lowered for kw in TOTAL_KEYWORDS):
+        if is_total_line:
             total_decimal_nums.extend(line_decimal)
             total_int_nums.extend(line_int)
 
+    # Filter out years (1900-2100) that slip in from document titles like
+    # "חשבון לתשלום תקופתי ארנונה – 1-2/2024".
+    total_int_non_year = [v for v in total_int_nums if not (1900 <= v <= 2100)]
+
     if total_decimal_nums:
         return round(max(total_decimal_nums), 2)
-    if total_int_nums:
-        return round(max(total_int_nums), 2)
+    if total_int_non_year:
+        return round(max(total_int_non_year), 2)
     if decimal_nums:
         return round(max(decimal_nums), 2)
     if all_nums:
